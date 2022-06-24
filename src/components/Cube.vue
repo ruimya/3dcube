@@ -9,22 +9,21 @@
   }">
     <template v-for="x in cube.layer">
       <template v-for="y in cube.layer">
-        <v-touch class="block" :x="x - 1" :y="y - 1" :z="z - 1" @swipeleft="swipeleft(x-1, y-1, z-1)"
-          @swiperight="swiperight(x-1, y-1, z-1)" @swipeup="swipeup(x-1, y-1, z-1)"
-          @swipedown="swipedown(x-1, y-1, z-1)" v-for="z in cube.layer" :key="'' + x + y + z" :style="{
-            '--rotate-x': blocks[x - 1][y - 1][z - 1].rotates.x,
-            '--rotate-y': blocks[x - 1][y - 1][z - 1].rotates.y,
-            '--rotate-z': blocks[x - 1][y - 1][z - 1].rotates.z,
-            '--translate-x': blocks[x - 1][y - 1][z - 1].translates.x,
-            '--translate-y': blocks[x - 1][y - 1][z - 1].translates.y,
-            '--translate-z': blocks[x - 1][y - 1][z - 1].translates.z,
-            transition: animation.enable
-              ? `transform ${animation.duration / 1000}s ease, -webkit-transform ${animation.duration / 1000}s ease`
-              : '',
-          }">
-          <div v-for="(side, index) in sides" :key="'' + x + y + z + index" :class="[side, 'side']" :style="{
+        <v-touch class="block" :x="x - 1" :y="y - 1" :z="z - 1" v-for="z in cube.layer" :key="'' + x + y + z" :style="{
+          '--rotate-x': blocks[x - 1][y - 1][z - 1].rotates.x,
+          '--rotate-y': blocks[x - 1][y - 1][z - 1].rotates.y,
+          '--rotate-z': blocks[x - 1][y - 1][z - 1].rotates.z,
+          '--translate-x': blocks[x - 1][y - 1][z - 1].translates.x,
+          '--translate-y': blocks[x - 1][y - 1][z - 1].translates.y,
+          '--translate-z': blocks[x - 1][y - 1][z - 1].translates.z,
+          transition: animation.enable
+            ? `transform ${animation.duration / 1000}s ease, -webkit-transform ${animation.duration / 1000}s ease`
+            : '',
+        }">
+          <v-touch v-for="(side, index) in sides" :key="'' + x + y + z + index" :class="[side, 'side']" :style="{
             '--color': blocks[x - 1][y - 1][z - 1].colors[side],
-          }"></div>
+          }" @swipeleft="swipeleft(x - 1, y - 1, z - 1, side)" @swiperight="swiperight(x - 1, y - 1, z - 1, side)"
+            @swipeup="swipeup(x - 1, y - 1, z - 1, side)" @swipedown="swipedown(x - 1, y - 1, z - 1, side)"></v-touch>
         </v-touch>
       </template>
     </template>
@@ -53,15 +52,68 @@ export default {
           front: '#b71234',
           back: '#ff5800',
         },
-        rotates: { x: 335, y: 414, z: 0 },
+        rotates: { x: -30, y: 130, z: 0 },
       },
       blocks: [],
     };
+  },
+  computed: {
+    perspective() {
+      let config = { left: '', right: '', top: '', bottom: '' };
+
+      function resetPerspectiveY(config, x, y) {
+        y = (y % 360 < 0) ? (y % 360 + 360) : (y % 360);
+
+        if (y > 0 && y <= 90) {
+          config.left = 'left';
+          config.right = 'front';
+        } else if (y > 90 && y <= 180) {
+          config.left = 'back';
+          config.right = 'left';
+        } else if (y > 180 && y <= 270) {
+          config.left = 'right';
+          config.right = 'back';
+        } else {
+          config.left = 'front';
+          config.right = 'right';
+        }
+      }
+
+      function resetPerspectiveX(config, x, y) {
+        let temp;
+        x = (x % 360 < 0) ? (x % 360 + 360) : (x % 360);
+
+        if (x > 0 && x <= 90) {
+          resetPerspectiveY(config, x, y);
+          config.bottom = 'bottom';
+
+        } else if (x > 90 && x <= 180) {
+          resetPerspectiveY(config, x, y + 180);
+          config.top = 'bottom';
+          temp = config.left;
+          config.left = config.right;
+          config.right = temp;
+        } else if (x > 180 && x <= 270) {
+          resetPerspectiveY(config, x, y + 180);
+          config.bottom = 'top';
+          temp = config.left;
+          config.left = config.right;
+          config.right = temp;
+        } else {
+          resetPerspectiveY(config, x, y);
+          config.top = 'top';
+        }
+      }
+
+      resetPerspectiveX(config, this.cube.rotates.x, this.cube.rotates.y)
+      return config;
+    }
   },
   created() {
     this.initBlocks();
   },
   mounted() {
+    console.log(this.perspective);
     var timer = null;
     document.onkeyup = (e) => {
       e = e || event || window.event || arguments.callee.caller.arguments[0];
@@ -162,18 +214,42 @@ export default {
           break;
       }
     },
-    swipeleft(x, y, z) {
-      this.rotateY(y, -90);
+    swipeleft(x, y, z, side) {
+      this._swipeHorizontal(x, y, z, side, -90);
     },
-    swiperight(x, y, z) {
-      this.rotateY(y, +90);
+    swiperight(x, y, z, side) {
+      this._swipeHorizontal(x, y, z, side, +90);
     },
-    swipeup( x, y, z) {
-      this.rotateY(y, +90);
-      console.log('swipeup event', x, y, z);
+    swipeup(x, y, z, side) {
+      this._swipeVertical(x, y, z, side, -90);
     },
-    swipedown(x, y, z) {
-      console.log('swiptedown event', x, y, z);
+    swipedown(x, y, z, side) {
+      this._swipeVertical(x, y, z, side, +90);
+    },
+    _swipeHorizontal(x, y, z, side, degree) {
+      let { left, right, top, bottom } = this.perspective;
+      if (top == 'bottom' || bottom == 'top')
+        degree = -degree;
+      this.rotateY(y, degree);
+    },
+    _swipeVertical(x, y, z, side, degree) {
+      let { left, right, top, bottom } = this.perspective;
+
+      if (this.cube.rotates.y >= 0 && this.cube.rotates.y <= 180)
+        degree = -degree
+
+      if (side == this.perspective.left) {
+        if ((top == 'top' || bottom == 'bottom') && (side == 'back' || side == 'front'))
+          degree = -degree;
+      } else if (side == this.perspective.right) {
+        if ((top == 'bottom' || bottom == 'top') && (side == 'back' || side == 'front'))
+          degree = -degree;
+      } else return;
+
+      if (side == 'front' || side == 'back')
+        this.rotateX(x, degree);
+      if (side == 'left' || side == 'right')
+        this.rotateZ(z, degree);
     },
     rotateX(x, degree) {
       if (this.animation.enable) return;
